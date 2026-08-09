@@ -7,4 +7,5 @@ dbt-core
 dbt-duckdb
 streamlit
 plotly
+statsmodels
 anthropic

@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import chat
+import stats as stats_module
 from data import load_company_names, load_financials_quarterly, load_valuation_daily
 
 TICKER_ORDER = ["MSFT", "AAPL", "GOOGL", "AMZN", "META"]
@@ -58,7 +59,7 @@ def main():
         render_dashboard(financials, valuation, tickers, company_names)
 
     with tab_chat:
-        render_chat(financials)
+        render_chat(financials, valuation)
 
 
 def render_dashboard(financials: pd.DataFrame, valuation: pd.DataFrame, tickers: list, company_names: dict):
@@ -142,13 +143,81 @@ def render_dashboard(financials: pd.DataFrame, valuation: pd.DataFrame, tickers:
         )
         st.plotly_chart(styled(fig), use_container_width=True)
 
+        render_statistical_analysis(val)
+
     with st.expander("View underlying quarterly data"):
         st.dataframe(fin, use_container_width=True)
 
 
-def render_chat(financials: pd.DataFrame):
+def render_statistical_analysis(val: pd.DataFrame):
+    st.subheader("Statistical Analysis: Fed Funds Rate vs. Valuation")
+    st.caption(
+        "Regressing valuation *levels* on the rate *level* would show a strong relationship "
+        "just because both series trend over 2021-2026 -- a classic spurious-regression trap "
+        "for two non-stationary series. This regresses month-over-month **changes** instead: "
+        "does a change in the Fed funds rate coincide with a change in valuation that same month."
+    )
+
+    changes = stats_module.monthly_changes(val)
+    pooled = stats_module.pooled_stats(val)
+    per_ticker = stats_module.per_ticker_stats(val)
+
+    if changes.empty or not pooled:
+        st.info("Not enough overlapping months of data to fit a regression for the selected companies.")
+        return
+
+    mc, ev = pooled.get("market_cap", {}), pooled.get("ev_ebitda", {})
+    col1, col2 = st.columns(2)
+    with col1:
+        if mc.get("beta") is not None:
+            st.metric(
+                "Market cap sensitivity to Fed rate",
+                f"{mc['beta']:+.2f} pp per 1pp rate move",
+                help=f"Pooled OLS across all selected companies. R² = {mc['r_squared']:.3f}, "
+                     f"p = {mc['p_value']:.3f}, n = {mc['n']} company-months.",
+            )
+    with col2:
+        if ev.get("beta") is not None:
+            st.metric(
+                "EV/EBITDA sensitivity to Fed rate",
+                f"{ev['beta']:+.2f} pp per 1pp rate move",
+                help=f"Pooled OLS across all selected companies. R² = {ev['r_squared']:.3f}, "
+                     f"p = {ev['p_value']:.3f}, n = {ev['n']} company-months.",
+            )
+
+    fig = px.scatter(
+        changes, x="rate_change_pp", y="market_cap_pct_change", color="ticker",
+        color_discrete_map=PALETTE, category_orders={"ticker": TICKER_ORDER},
+        trendline="ols", trendline_scope="overall", trendline_color_override="#0b0b0b",
+        labels={
+            "rate_change_pp": "Δ Fed Funds Rate (pp, month-over-month)",
+            "market_cap_pct_change": "Δ Market Cap (%, month-over-month)",
+        },
+        title="Monthly Change in Market Cap vs. Monthly Change in Fed Funds Rate",
+    )
+    st.plotly_chart(styled(fig), use_container_width=True)
+
+    if not per_ticker.empty:
+        st.dataframe(
+            per_ticker.rename(columns={
+                "ticker": "Ticker", "months": "Months",
+                "market_cap_beta": "Mkt Cap β (pp/1pp)", "market_cap_r2": "Mkt Cap R²",
+                "market_cap_pvalue": "Mkt Cap p-value",
+                "ev_ebitda_beta": "EV/EBITDA β (pp/1pp)", "ev_ebitda_r2": "EV/EBITDA R²",
+                "ev_ebitda_pvalue": "EV/EBITDA p-value",
+            }).set_index("Ticker"),
+            use_container_width=True,
+        )
+        st.caption(
+            "β is the average percentage-point change in the metric per 1 percentage point "
+            "change in the Fed funds rate that month. Small monthly sample sizes (~55 per "
+            "company) mean these are indicative, not definitive -- and correlation isn't causation."
+        )
+
+
+def render_chat(financials: pd.DataFrame, valuation: pd.DataFrame):
     st.subheader("Ask the data")
-    st.caption("Answers are grounded only in the curated dataset -- most recent 4 quarters per company.")
+    st.caption("Answers are grounded only in the curated dataset -- most recent 4 quarters per company, plus the Fed-rate/valuation regression above.")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
@@ -164,9 +233,10 @@ def render_chat(financials: pd.DataFrame):
             st.markdown(question)
 
         context = chat.build_context(financials)
+        rate_context = stats_module.context_summary(valuation)
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                answer = chat.ask(question, context, st.session_state.chat_history[:-1])
+                answer = chat.ask(question, context, rate_context, st.session_state.chat_history[:-1])
             st.markdown(answer)
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
 

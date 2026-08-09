@@ -18,11 +18,20 @@ Fed funds rate went from ~0.1% (early 2021) to a peak above 5% (mid-2023) before
   doubled from ~0.9 (2021) to a peak near 2.2 (2022) as it kept buying back stock against a
   shrinking equity base, then fell back toward ~0.8 as equity rebuilt. MSFT, GOOGL, and AMZN kept
   debt-to-equity low and comparatively flat throughout.
-- **EV/EBITDA multiples compressed during the hiking cycle** and expanded again as rates eased —
-  consistent with higher discount rates pressuring growth-stock multiples.
+- **EV/EBITDA multiples compressed during the hiking cycle** and expanded again as rates eased,
+  visually tracking the rate cycle.
+- **But the rigorous version of that story is weaker than the chart suggests.** Regressing
+  month-over-month % change in market cap against month-over-month change in the Fed funds rate
+  (pooled across all five companies, n=335 company-months) gives a small negative coefficient
+  (-4.06 pp of market cap growth per +1pp of rate change) with R² = 0.007 and p = 0.12 — not
+  statistically significant at conventional thresholds. Per-company results vary in both sign and
+  magnitude. The multi-year *trends* clearly move together; the *month-to-month* relationship is
+  noisy. See the dashboard's "Statistical Analysis" section for the full regression, including why
+  it's built on differenced (not level) series to avoid spurious correlation between two trending
+  time series.
 
 Explore the detail in the live dashboard, or ask the chat tab a specific question about any of
-the five companies.
+the five companies — its answers are grounded in the same regression output.
 
 ## Architecture
 
@@ -76,7 +85,8 @@ flowchart LR
 | Warehouse | DuckDB | File-based, zero hosting, ships inside the repo |
 | Transformation | dbt Core + `dbt-duckdb` | SQL-based, tested, documented |
 | Dashboard | Streamlit + Plotly | Fast to build, deploys straight from GitHub |
-| AI chat | Claude API (`claude-opus-5`) | Prompt-grounded Q&A over the curated dataset |
+| Statistical modeling | `statsmodels` (OLS) | Regresses differenced series to quantify (and honestly caveat) the rate/valuation relationship |
+| AI chat | Claude API (`claude-opus-5`) | Prompt-grounded Q&A over the curated dataset + regression output |
 
 ## Repo structure
 

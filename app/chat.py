@@ -13,11 +13,16 @@ SYSTEM_PROMPT = """You are a financial data analyst assistant embedded in a publ
 dashboard about how Fed rate hikes since 2022 affected Big Tech balance sheet leverage and \
 valuation (MSFT, AAPL, GOOGL, AMZN, META).
 
-You answer questions using ONLY the curated dataset provided below. If the answer isn't in the \
-data, say so plainly rather than guessing. Cite specific numbers and quarters when relevant. \
-Keep answers concise -- a few sentences unless the user asks for detail.
+You answer questions using ONLY the curated dataset and statistics provided below. If the \
+answer isn't in the data, say so plainly rather than guessing. Cite specific numbers when \
+relevant, including regression coefficients, R^2, and p-values where they're the most direct \
+answer to a question about how the Fed rate relates to valuation. Keep answers concise -- a few \
+sentences unless the user asks for detail.
 
-Dataset (most recent 4 quarters per company, in USD unless noted):
+=== Fed funds rate vs. valuation: trend and regression summary ===
+{rate_context}
+
+=== Latest 4 quarters of balance sheet / income statement data per company (USD unless noted) ===
 {context}
 """
 
@@ -45,7 +50,7 @@ def build_context(financials: pd.DataFrame) -> str:
     return latest[cols].to_csv(index=False)
 
 
-def ask(question: str, context: str, history: list[dict]) -> str:
+def ask(question: str, context: str, rate_context: str, history: list[dict]) -> str:
     api_key = _get_api_key()
     if not api_key:
         return (
@@ -59,7 +64,7 @@ def ask(question: str, context: str, history: list[dict]) -> str:
     response = client.messages.create(
         model=MODEL,
         max_tokens=1024,
-        system=SYSTEM_PROMPT.format(context=context),
+        system=SYSTEM_PROMPT.format(context=context, rate_context=rate_context),
         output_config={"effort": "medium"},
         messages=messages,
     )
