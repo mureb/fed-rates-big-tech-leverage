@@ -66,13 +66,23 @@ def ask(question: str, context: str, rate_context: str, history: list[dict]) -> 
     client = anthropic.Anthropic(api_key=api_key)
     messages = history + [{"role": "user", "content": question}]
 
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT.format(context=context, rate_context=rate_context),
-        output_config={"effort": "medium"},
-        messages=messages,
-    )
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            # Claude Opus 5 has extended thinking on by default, and max_tokens caps
+            # thinking + visible text combined -- too small a budget here silently
+            # truncates or empties out the answer, not just the thinking.
+            max_tokens=4096,
+            system=SYSTEM_PROMPT.format(context=context, rate_context=rate_context),
+            output_config={"effort": "medium"},
+            messages=messages,
+        )
+    except anthropic.APIError as e:
+        return f"The request to Claude failed: {e}"
+
     if response.stop_reason == "refusal":
         return "The request was declined by safety filters. Try rephrasing."
-    return next((b.text for b in response.content if b.type == "text"), "")
+    text = next((b.text for b in response.content if b.type == "text"), "")
+    if response.stop_reason == "max_tokens":
+        text += "\n\n_(Answer was cut off at the token limit -- ask a narrower question for a complete response.)_"
+    return text
