@@ -5,7 +5,7 @@ and Meta** from 2021 through the present. It pulls raw financial and macro data 
 APIs, models it into leverage and valuation metrics with dbt, and serves the result as a
 Streamlit dashboard with an AI chat layer grounded in the curated dataset.
 
-**Live app:** _add your Streamlit Community Cloud URL here after deploying_
+**Live app:** https://fed-rates-big-tech-leverage-85wksgqdbzf2pvdbgrp3af.streamlit.app
 
 ## The question, briefly answered
 
