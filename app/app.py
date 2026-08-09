@@ -143,13 +143,13 @@ def render_dashboard(financials: pd.DataFrame, valuation: pd.DataFrame, tickers:
         )
         st.plotly_chart(styled(fig), use_container_width=True)
 
-        render_statistical_analysis(val)
+        render_statistical_analysis(fin, val)
 
     with st.expander("View underlying quarterly data"):
         st.dataframe(fin, use_container_width=True)
 
 
-def render_statistical_analysis(val: pd.DataFrame):
+def render_statistical_analysis(fin: pd.DataFrame, val: pd.DataFrame):
     st.subheader("Statistical Analysis: Fed Funds Rate vs. Valuation")
     st.caption(
         "Regressing valuation *levels* on the rate *level* would show a strong relationship "
@@ -214,10 +214,80 @@ def render_statistical_analysis(val: pd.DataFrame):
             "company) mean these are indicative, not definitive -- and correlation isn't causation."
         )
 
+    render_leverage_regression(fin, val)
+
+
+def render_leverage_regression(fin: pd.DataFrame, val: pd.DataFrame):
+    st.markdown("#### Leverage vs. Fed Funds Rate")
+    st.caption(
+        "Same approach, applied to quarter-over-quarter change in debt-to-equity and the "
+        "current ratio -- this is the direct test of the project's headline leverage question, "
+        "covering the 2022-2023 hiking cycle itself rather than just where leverage landed after it."
+    )
+
+    lev_changes = stats_module.quarterly_leverage_changes(fin, val)
+    lev_pooled = stats_module.leverage_pooled_stats(fin, val)
+    lev_per_ticker = stats_module.leverage_per_ticker_stats(fin, val)
+
+    if lev_changes.empty or not lev_pooled:
+        st.info("Not enough overlapping quarters of data to fit a regression for the selected companies.")
+        return
+
+    de, cr = lev_pooled.get("debt_to_equity", {}), lev_pooled.get("current_ratio", {})
+    col1, col2 = st.columns(2)
+    with col1:
+        if de.get("beta") is not None:
+            st.metric(
+                "Debt/Equity sensitivity to Fed rate",
+                f"{de['beta']:+.3f} per 1pp rate move",
+                help=f"Pooled OLS across all selected companies, quarter-over-quarter. "
+                     f"R² = {de['r_squared']:.3f}, p = {de['p_value']:.3f}, n = {de['n']} company-quarters.",
+            )
+    with col2:
+        if cr.get("beta") is not None:
+            st.metric(
+                "Current Ratio sensitivity to Fed rate",
+                f"{cr['beta']:+.3f} per 1pp rate move",
+                help=f"Pooled OLS across all selected companies, quarter-over-quarter. "
+                     f"R² = {cr['r_squared']:.3f}, p = {cr['p_value']:.3f}, n = {cr['n']} company-quarters.",
+            )
+
+    fig = px.scatter(
+        lev_changes, x="rate_change_pp", y="de_change", color="ticker",
+        color_discrete_map=PALETTE, category_orders={"ticker": TICKER_ORDER},
+        trendline="ols", trendline_scope="overall", trendline_color_override="#0b0b0b",
+        labels={
+            "rate_change_pp": "Δ Fed Funds Rate (pp, quarter-over-quarter)",
+            "de_change": "Δ Debt-to-Equity (quarter-over-quarter)",
+        },
+        title="Quarterly Change in Debt-to-Equity vs. Change in Fed Funds Rate",
+    )
+    st.plotly_chart(styled(fig), use_container_width=True)
+
+    if not lev_per_ticker.empty:
+        st.dataframe(
+            lev_per_ticker.rename(columns={
+                "ticker": "Ticker", "quarters": "Quarters",
+                "debt_to_equity_beta": "D/E β (per 1pp)", "debt_to_equity_r2": "D/E R²",
+                "debt_to_equity_pvalue": "D/E p-value",
+                "current_ratio_beta": "Current Ratio β (per 1pp)", "current_ratio_r2": "Current Ratio R²",
+                "current_ratio_pvalue": "Current Ratio p-value",
+            }).set_index("Ticker"),
+            use_container_width=True,
+        )
+        st.caption(
+            "Small quarterly sample sizes (~20 per company) mean these are indicative, not "
+            "definitive -- and correlation isn't causation."
+        )
+
 
 def render_chat(financials: pd.DataFrame, valuation: pd.DataFrame):
     st.subheader("Ask the data")
-    st.caption("Answers are grounded only in the curated dataset -- most recent 4 quarters per company, plus the Fed-rate/valuation regression above.")
+    st.caption(
+        "Answers are grounded only in the curated dataset -- full quarterly history per "
+        "company (including the 2022-2023 hiking cycle), plus the Fed-rate/leverage/valuation "
+        "regressions above."
+    )
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
@@ -233,7 +303,7 @@ def render_chat(financials: pd.DataFrame, valuation: pd.DataFrame):
             st.markdown(question)
 
         context = chat.build_context(financials)
-        rate_context = stats_module.context_summary(valuation)
+        rate_context = stats_module.context_summary(financials, valuation)
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 answer = chat.ask(question, context, rate_context, st.session_state.chat_history[:-1])

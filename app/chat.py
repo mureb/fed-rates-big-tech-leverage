@@ -14,15 +14,16 @@ dashboard about how Fed rate hikes since 2022 affected Big Tech balance sheet le
 valuation (MSFT, AAPL, GOOGL, AMZN, META).
 
 You answer questions using ONLY the curated dataset and statistics provided below. If the \
-answer isn't in the data, say so plainly rather than guessing. Cite specific numbers when \
-relevant, including regression coefficients, R^2, and p-values where they're the most direct \
-answer to a question about how the Fed rate relates to valuation. Keep answers concise -- a few \
-sentences unless the user asks for detail.
+answer isn't in the data, say so plainly rather than guessing. Cite specific numbers and quarters \
+when relevant, including regression coefficients, R^2, and p-values where they're the most direct \
+answer to a question about how the Fed rate relates to leverage or valuation. Keep answers \
+concise -- a few sentences unless the user asks for detail.
 
-=== Fed funds rate vs. valuation: trend and regression summary ===
+=== Fed funds rate vs. leverage/valuation: trend and regression summary (covers the full history, \
+including the 2022-2023 hiking cycle) ===
 {rate_context}
 
-=== Latest 4 quarters of balance sheet / income statement data per company (USD unless noted) ===
+=== Full quarterly balance sheet / income statement history per company, 2021-present (USD unless noted) ===
 {context}
 """
 
@@ -38,16 +39,20 @@ def _get_api_key() -> str | None:
 
 
 def build_context(financials: pd.DataFrame) -> str:
+    """Full quarterly history, not just the latest few quarters -- the chat needs to see the
+    2022-2023 hiking cycle itself, not just where leverage/liquidity landed afterward. The
+    dataset is small (~20 quarters x 5 tickers) so this comfortably fits in the system prompt
+    without needing a vector store."""
     if financials.empty:
         return "(no data available)"
-    latest = financials.sort_values("period_end").groupby("ticker").tail(4)
+    full_history = financials.sort_values(["ticker", "period_end"])
     cols = [
         "ticker", "period_end", "revenue", "net_income", "ebitda", "ebitda_ttm",
         "current_ratio", "debt_to_equity", "liabilities_to_assets",
         "total_assets", "total_debt", "stockholders_equity",
     ]
-    cols = [c for c in cols if c in latest.columns]
-    return latest[cols].to_csv(index=False)
+    cols = [c for c in cols if c in full_history.columns]
+    return full_history[cols].to_csv(index=False)
 
 
 def ask(question: str, context: str, rate_context: str, history: list[dict]) -> str:
