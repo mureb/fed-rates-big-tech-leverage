@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: fct_balance_sheet_quarterly
+    description: One row per ticker per reporting period with core balance sheet line items.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
+      - name: total_assets
+        data_tests:
+          - not_null
+
+  - name: fct_income_statement_quarterly
+    description: One row per ticker per fiscal quarter with income statement line items and trailing-twelve-month EBITDA.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
+
+  - name: fct_financials_quarterly
+    description: Combined balance sheet + income statement facts with leverage/liquidity ratios, one row per ticker per quarter.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
+      - name: current_ratio
+        data_tests:
+          - not_null
+      - name: debt_to_equity
+        data_tests:
+          - not_null
+
+  - name: fct_valuation_daily
+    description: Daily approximate market cap / EV / EV-to-EBITDA per ticker overlaid with the Fed funds rate.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: price_date
+        data_tests:
+          - not_null

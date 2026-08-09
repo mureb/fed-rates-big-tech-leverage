@@ -1,0 +1,10 @@
+requests
+pandas
+duckdb
+python-dotenv
+yfinance
+dbt-core
+dbt-duckdb
+streamlit
+plotly
+anthropic

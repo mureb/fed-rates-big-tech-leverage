@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: raw_edgar_facts
+        description: Long-format XBRL facts pulled from SEC EDGAR's companyconcept API.
+      - name: raw_yfinance_prices
+        description: Daily adjusted close price + volume per ticker from Yahoo Finance.
+      - name: raw_yfinance_valuation_snapshot
+        description: Point-in-time valuation multiples (market cap, EV, P/E) from Yahoo Finance.
+      - name: raw_fred_series
+        description: Macro time series (Fed funds rate, 10Y treasury) from the FRED API.
